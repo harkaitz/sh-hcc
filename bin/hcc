@@ -23,20 +23,26 @@
 #L:  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 #L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 #L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##:
 #h: Usage: hcc [OPTIONS...] FILE ARGUMENTS
 #h:
-#h: This program helps creating script in the C language. A hello world
-#h: script named "hello-world" looks like this:
+#h: Launch a C program like if it was a scripting language. The
+#h: bootstrap is done the following way:
 #h:
 #h:     #if 0 /*
 #h:         exec hcc [OPTS...] "$0" "$@"
 #h:         */
 #h:     #endif
 #h:     #include <stdio.h>
-#h:     int main (int argc, const char *argv[]) {
+#h:     int the_script_filename (int argc, const char *argv[]) {
 #h:         printf("Hello world.\n");
 #h:         return 0;
 #h:     }
+#h:
+#h: The following environment variables are used.
+#h:
+#h:     Compilation: CC,CFLAGS,CPPFLAGS,LDFLAGS,LIBS,FORCE_BUILD
+#h:     Launcher:    HCC_RUN (ie env or nice)
 #h:
 #h: Options:
 #h:
@@ -45,7 +51,7 @@
 #h:     -l<LIB> -L<DIR> : Add libraries to link.
 #h:     -I<INCDIR>      : Add include directory.
 #h:     -S<SOURCE>      : Compile this source.
-#h:     -std=<STANDARD> :
+#h:     -std=<STANDARD> : The C standard to use.
 hcc() {
     local args= files= file= main_file=
     ## Get arguments for the compiler.
@@ -102,11 +108,12 @@ hcc() {
     ${HCC_RUN:-env} "${out_exe}" "$@"
 }
 hcc_show_variables() {
-    printf '%-30s : %s\n' CC          "${CC}"
-    printf '%-30s : %s\n' CFLAGS      "${CFLAGS}"
-    printf '%-30s : %s\n' CPPFLAGS    "${CPPFLAGS}"
-    printf '%-30s : %s\n' LDFLAGS     "${LDFLAGS}"
-    printf '%-30s : %s\n' LIBS        "${LIBS}"
+    printf '%-30s : %s\n'            \
+           CC          "${CC}"       \
+           CFLAGS      "${CFLAGS}"   \
+           CPPFLAGS    "${CPPFLAGS}" \
+           LDFLAGS     "${LDFLAGS}"  \
+           LIBS        "${LIBS}"
     printf '%-30s : %s\n' FORCE_BUILD "${FORCE_BUILD}"
     printf '%-30s : %s\n' HCC_RUN     "${HCC_RUN}"
 }
