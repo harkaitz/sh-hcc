@@ -51,7 +51,7 @@
 #h:     -l<LIB> -L<DIR> : Add libraries to link.
 #h:     -I<INCDIR>      : Add include directory.
 #h:     -S<SOURCE>      : Compile this source.
-#h:     -std=<STANDARD> : The C standard to use.
+#h:     -std=<STANDARD> : The C standard to use (gcc).
 hcc() {
     local args= files= file= main_file=
     ## Get arguments for the compiler.
@@ -82,28 +82,46 @@ hcc() {
         return 1
     fi
     local out_dir="/tmp/hcc-`whoami`"
-    local out_exe="${out_dir}/`basename "${main_file}"`"
+    local out_exe="${out_dir}/`basename "${main_file}"`.`basename "${CC}"`"
     local build="${FORCE_BUILD}"
-    local maindef="`basename "${main_file}" | tr '.' '_'`"
+    local maindef="`basename "${main_file}" | tr '.' '_' | tr '-' '_'`"
     if test ! -f "${out_exe}";then
         local build=y
     fi
-    for file in ${main_file} ${files};do
-        if test "${file}" -nt "${out_exe}";then
+    for file in ${main_file} ${files}; do
+        if test "${file}" -nt "${out_exe}"; then
             local build=y
             break;
         fi
     done
-    if test @"${build}" = @"y";then
+    if test @"${build}" = @"y"; then
         mkdir -p "${out_dir}"
-        "${CC}" -x c                  \
-                -o "${out_exe}"       \
-                -D${maindef}=main     \
-                ${main_file}          \
-                ${files}              \
-                ${args}               \
-                ${CFLAGS} ${CPPFLAGS} \
-                ${LDFLAGS} ${LIBS}
+        case "${CC}" in
+            *gcc|*clang)
+                "${CC}" \
+                    -x c                  \
+                    -std=c11              \
+                    -o "${out_exe}"       \
+                    -D${maindef}=main     \
+                    ${main_file}          \
+                    ${files}              \
+                    ${args}               \
+                    ${CFLAGS} ${CPPFLAGS} \
+                    ${LDFLAGS} ${LIBS}
+                ;;
+            *cproc)
+                "${CC}"                   \
+                    -x c                  \
+                    -std=c11              \
+                    -o "${out_exe}"       \
+                    -D${maindef}=main     \
+                    ${main_file}          \
+                    ${files}              \
+                    ${args}               \
+                    ${CFLAGS} ${CPPFLAGS} \
+                    ${LDFLAGS} ${LIBS}
+                ;;
+        esac
     fi
     ${HCC_RUN:-env} "${out_exe}" "$@"
 }

@@ -33,7 +33,7 @@ hcc
         -l<LIB> -L<DIR> : Add libraries to link.
         -I<INCDIR>      : Add include directory.
         -S<SOURCE>      : Compile this source.
-        -std=<STANDARD> : The C standard to use.
+        -std=<STANDARD> : The C standard to use (gcc).
 
 ## Collaborating
 
