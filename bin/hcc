@@ -52,10 +52,12 @@
 #h:     -I<INCDIR>      : Add include directory.
 #h:     -S<SOURCE>      : Compile this source.
 #h:     -std=<STANDARD> : The C standard to use (gcc).
+#h:     -include FILE   : Include file.
+#h:     -main    CODE   : Execute code in a main.
 hcc() {
-    local args= files= file= main_file=
+    local args= files= file= main_file= code=
     ## Get arguments for the compiler.
-    while test -n "$1";do
+    while test -n "$1"; do
         case "$1" in
             -v)
                 hcc_show_variables
@@ -64,10 +66,25 @@ hcc() {
             -l*|-L*|-I*|-std=*|-W*|-p*)
                 local args="${args} ${1}"
                 ;;
-            -x) local args="${args} ${1} ${2}"
+            -x)
+                local args="${args} ${1} ${2}"
                 shift
                 ;;
-            -S*) local files="${files} `echo "${1}" | cut -b 3-`"
+            -S*)
+                local files="${files} `echo "${1}" | cut -b 3-`"
+                ;;
+            -include)
+                local args="${args} ${1} ${2}"
+                shift
+                ;;
+            -main)
+                local code="${code}`cat <<-EOF
+		int main (int _argc, char *_argv[]) {
+		    ${2}
+		    return 0;
+		}
+		EOF`"
+                shift
                 ;;
             *)
                 local main_file="${1}"
@@ -77,6 +94,13 @@ hcc() {
         esac
         shift
     done
+    if test -n "${code}"; then
+        local cksum="`printf '%s\n' "${code}" | md5sum | cut -f 1 -d ' '`"
+        local main_file="/tmp/hcc-${cksum}.c"
+        if test ! -f "${main_file}"; then
+            printf '%s\n' "${code}" | tee > "${main_file}"
+        fi
+    fi
     if test ! -n "${main_file}";then
         echo "${SCRNAME}: error: Please specify a file to compile."
         return 1
