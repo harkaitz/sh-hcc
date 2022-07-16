@@ -34,6 +34,8 @@ hcc
         -I<INCDIR>      : Add include directory.
         -S<SOURCE>      : Compile this source.
         -std=<STANDARD> : The C standard to use (gcc).
+        -include FILE   : Include file.
+        -main    CODE   : Execute code in a main.
 
 ## Collaborating
 
