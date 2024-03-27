@@ -1,0 +1,190 @@
+#!/bin/sh -e
+#L:  MIT License
+#L:
+#l:  Copyright (c) 2023 Harkaitz Agirre, harkaitz.aguirre@gmail.com
+#L:
+#L:  Permission is hereby granted, free of charge, to any person obtaining a copy
+#L:  of this software and associated documentation files (the "Software"), to deal
+#L:  in the Software without restriction, including without limitation the rights
+#L:  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#L:  copies of the Software, and to permit persons to whom the Software is
+#L:  furnished to do so, subject to the following conditions:
+#L:
+#L:  The above copyright notice and this permission notice shall be included in all
+#L:  copies or substantial portions of the Software.
+#L:
+#L:  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#L:  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#L:  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#L:  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#L:  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#L:  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#L:  SOFTWARE.
+##:
+#h: Usage: hcc [OPTIONS...] FILE ARGUMENTS
+#h:
+#h: Launch a C program like if it was a scripting language. The
+#h: bootstrap is done the following way:
+#h:
+#h:     #if 0 /* -*- mode: c-mode -*-
+#h:         exec hcc [OPTS...] "$0" "$@"
+#h:         */
+#h:     #endif
+#h:
+#h:     or
+#h:
+#h:     //bin/true && exec hcc "$0" "$@" # /* -*- mode: c-mode -*-
+#h:
+#h:     #include <stdio.h>
+#h:     int F (int argc, const char *argv[]) {
+#h:         printf("Hello world.\n");
+#h:         return 0;
+#h:     }
+#h:
+#h: The following environment variables are used.
+#h:
+#h:     Compilation: CC,CFLAGS,CPPFLAGS,LDFLAGS,LIBS,FORCE_BUILD
+#h:     Launcher:    HCC_RUN (ie env or nice)
+#h:     Macros:      _HCC_
+#h:
+#h: Options:
+#h:
+#h:     -v              : Show used compiler etc.
+#h:     -W<arg>         : Add flag.
+#h:     -l<LIB> -L<DIR> : Add libraries to link.
+#h:     -I<INCDIR>      : Add include directory.
+#h:     -DVAR=VAL       : Define macro.
+#h:     -S<SOURCE>      : Compile this source.
+#h:     -std=<STANDARD> : The C standard to use (gcc).
+#h:     -include FILE   : Include file.
+#h:     -main    CODE   : Execute code in a main.
+hcc() {
+    local args= files= file= main_file= code=
+    ## Get arguments for the compiler.
+    while test -n "$1"; do
+        case "$1" in
+            -v)
+                hcc_show_variables
+                return 0
+                ;;
+            -l*|-L*|-I*|-std=*|-W*|-p*|-D*)
+                local args="${args} ${1}"
+                ;;
+            -x)
+                local args="${args} ${1} ${2}"
+                shift
+                ;;
+            -S*)
+                local files="${files} `echo "${1}" | cut -b 3-`"
+                ;;
+            -include)
+                local args="${args} ${1} ${2}"
+                shift
+                ;;
+            -main)
+                local code="${code}`cat <<-EOF
+		int main (int _argc, char *_argv[]) {
+		    ${2}
+		    return 0;
+		}
+		EOF`"
+                shift
+                ;;
+            *)
+                local main_file="${1}"
+                shift
+                break
+                ;;
+        esac
+        shift
+    done
+    if test -n "${code}"; then
+        local cksum="`printf '%s\n' "${code}" | md5sum | cut -f 1 -d ' '`"
+        local main_file="/tmp/hcc-${cksum}.c"
+        if test ! -f "${main_file}"; then
+            printf '%s\n' "${code}" | tee > "${main_file}"
+        fi
+    fi
+    if test ! -n "${main_file}";then
+        echo "${SCRNAME}: error: Please specify a file to compile."
+        return 1
+    fi
+    local out_dir="/tmp/hcc-`whoami`"
+    local out_exe="${out_dir}/`basename "${main_file}"`.`basename "${CC}"`"
+    local build="${FORCE_BUILD}"
+    if test ! -f "${out_exe}";then
+        local build=y
+    fi
+    for file in ${main_file} ${files}; do
+        if test "${file}" -nt "${out_exe}"; then
+            local build=y
+            break;
+        fi
+    done
+    if test @"${build}" = @"y"; then
+        mkdir -p "${out_dir}"
+        case "${CC}" in
+            *gcc|*clang)
+                "${CC}" \
+                    -x c                  \
+                    -std=c11              \
+                    -o "${out_exe}"       \
+                    -D_HCC_               \
+                    ${args}               \
+                    ${main_file}          \
+                    ${files}              \
+                    ${CFLAGS} ${CPPFLAGS} \
+                    ${LDFLAGS} ${LIBS}
+                ;;
+            *cproc)
+                "${CC}"                   \
+                    -x c                  \
+                    -std=c11              \
+                    -o "${out_exe}"       \
+                    -D_HCC_               \
+                    ${main_file}          \
+                    ${files}              \
+                    ${args}               \
+                    ${CFLAGS} ${CPPFLAGS} \
+                    ${LDFLAGS} ${LIBS}
+                ;;
+        esac
+    fi
+    ${HCC_RUN:-env} "${out_exe}" "$@"
+}
+hcc_show_variables() {
+    printf '%-30s : %s\n'            \
+           CC          "${CC}"       \
+           CFLAGS      "${CFLAGS}"   \
+           CPPFLAGS    "${CPPFLAGS}" \
+           LDFLAGS     "${LDFLAGS}"  \
+           LIBS        "${LIBS}"
+    printf '%-30s : %s\n' FORCE_BUILD "${FORCE_BUILD}"
+    printf '%-30s : %s\n' HCC_RUN     "${HCC_RUN}"
+}
+hcc_calc_variables() {
+    CC="${CC:-gcc}"
+    CFLAGS="${CFLAGS:-}"
+    CPPFLAGS="${CPPFLAGS:-}"
+    LDFLAGS="${LDFLAGS:-}"
+    LIBS="${LIBS:-}"
+    FORCE_BUILD="${FORCE_BUILD:-n}"
+}
+## -----------------------------------------------------------------------------
+
+
+## -----------------------------------------------------------------------------
+SCRNAME="`basename "$0"`"
+hcc_calc_variables
+if test @"${SCRNAME}" = @"hcc";then
+    case "${1}" in
+        ''|-h|--help)
+            sed -n 's/^ *#h: \{0,1\}//p' "$0"
+            echo ""
+            sed -n 's/^ *#l: \{0,2\}//p' "$0"
+            ;;
+        *)
+            hcc "$@"
+            ;;
+    esac
+fi
